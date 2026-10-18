@@ -48,3 +48,8 @@ In der Teilnehmerübersicht kann pro Person eine Stundenkorrektur eingetragen we
 ### PDF-Ausgabe
 - Das Kürzel „STS“ wird mit schmalerem Zellinnenabstand und kleinerer Schrift ohne unnötigen Zeilenumbruch ausgegeben.
 - Leere Anwesenheitsfelder an eingetragenen Unterrichtstagen werden in der PDF als „X“ dargestellt. Nicht belegte Zusatzspalten bleiben leer.
+
+
+### Stundenübersicht und Handyansicht
+- Beim Aktualisieren mit vorhandenen Supabase-Anwesenheitsdaten werden lokale Monats-Caches ersetzt, damit keine alten Monate auf einzelnen Geräten stehen bleiben.
+- Die Teilnehmerübersicht wird auf kleinen Bildschirmen kompakter dargestellt; die Desktop-Regeln bleiben außerhalb des mobilen Breakpoints unverändert.

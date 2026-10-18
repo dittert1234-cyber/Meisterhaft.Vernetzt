@@ -437,14 +437,29 @@ function renderArchiveList(){
   });
   el.appendChild(list);
 }
-$("archiveMonth")?.addEventListener("click",()=>{
-  saveMonth();
-  const archived=JSON.parse(localStorage.getItem("attendance-archived-months")||"[]");
-  const key=monthKey();
-  if(!archived.includes(key)) archived.push(key);
-  localStorage.setItem("attendance-archived-months",JSON.stringify(archived));
-  renderArchiveList();
-  showStatus(`${monthLabel()} wurde gespeichert und in der Monatsablage abgelegt.`,false,true);
+$("archiveMonth")?.addEventListener("click", async ()=>{
+  const btn=$("archiveMonth");
+  if(btn){btn.disabled=true;btn.dataset.originalText=btn.textContent;btn.textContent="Speichert & legt ab …";}
+  try {
+    // Erst lokal sichern, dann auf erfolgreiche Cloud-Speicherung warten.
+    saveMonth();
+    if(!window.attendanceCloud || !window.attendanceCloud.isReady()) {
+      throw new Error("Keine aktive Supabase-Verbindung. Bitte anmelden und erneut versuchen.");
+    }
+    showStatus("Monat wird in Supabase gespeichert …",false,false);
+    await window.attendanceCloud.saveAll();
+    const archived=JSON.parse(localStorage.getItem("attendance-archived-months")||"[]");
+    const key=monthKey();
+    if(!archived.includes(key)) archived.push(key);
+    localStorage.setItem("attendance-archived-months",JSON.stringify(archived));
+    renderArchiveList();
+    showStatus(`✓ ${monthLabel()} wurde erfolgreich in Supabase gespeichert und in der Monatsablage abgelegt.`,false,true);
+  } catch(err) {
+    console.error(err);
+    showStatus(`✕ Monat nicht erfolgreich in Supabase gespeichert. Die lokalen Daten bleiben erhalten; bitte Verbindung prüfen und erneut versuchen. ${err.message||err}`,true);
+  } finally {
+    if(btn){btn.disabled=false;btn.textContent=btn.dataset.originalText||"Monat speichern & ablegen";delete btn.dataset.originalText;}
+  }
 });
 
 function pdfFileName(){return "Anwesenheit_"+monthKey()+".pdf";}
@@ -559,15 +574,34 @@ function saveAllLocal(){
   saveParticipants();
   saveHourSettings();
 }
+function downloadLocalBackup(){
+  const data={format:'meisterhaft-anwesenheit-backup-v1',createdAt:new Date().toISOString(),origin:location.origin,items:{}};
+  for(let i=0;i<localStorage.length;i++){
+    const key=localStorage.key(i);
+    if(key && (key.startsWith('attendance:') || key.startsWith('attendance-'))){
+      data.items[key]=localStorage.getItem(key);
+    }
+  }
+  data.items['attendance-participants']=localStorage.getItem('attendance-participants');
+  data.items['attendance-hour-settings']=localStorage.getItem('attendance-hour-settings');
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download='Anwesenheit-Backup-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  showStatus('Datenbackup wurde erstellt. Bitte die JSON-Datei sicher aufbewahren.',false,true);
+}
+$('backupData')?.addEventListener('click',downloadLocalBackup);
+
 async function saveAllNow(){
   const btn=$("saveNow");
   if(btn){btn.disabled=true;btn.textContent="Speichert …";}
+  if(cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=null;}
   saveAllLocal();
-  showStatus("Speichern läuft …",false,false);
+  showStatus("Speichern läuft – Daten werden an Supabase übertragen …",false,false);
   try {
     if(window.attendanceCloud && window.attendanceCloud.isReady()) {
       await window.attendanceCloud.saveAll();
-      showStatus("✓ Erfolgreich gespeichert – Änderungen sind in Supabase übernommen.",false,true);
+      showStatus("✓ Erfolgreich gespeichert – Supabase hat die Änderungen angenommen.",false,true);
     } else {
       showStatus("Nur auf diesem Gerät gespeichert – nicht in Supabase. Bitte anmelden und erneut speichern.",true);
     }
@@ -683,9 +717,34 @@ renderArchiveList();
       monthData[mk].attendance[row.attendance_date]=monthData[mk].attendance[row.attendance_date]||{};
       monthData[mk].attendance[row.attendance_date][idx]=row.entry||'';
     }
-    Object.entries(monthData).forEach(([mk,data])=>{data.dates.sort();localStorage.setItem('attendance:'+mk,JSON.stringify(data));});
-    // If the cloud has no attendance yet, seed the existing local months once.
-    if(!(days||[]).length) await saveAll();
+    // Sicherheits-Merge: lokale Monate niemals pauschal löschen.
+    // Lokale, nichtleere Einträge bleiben erhalten; fehlende Daten werden aus Supabase ergänzt.
+    const localKeys=Object.keys(localStorage).filter(key=>/^attendance:\d{4}-\d{2}$/.test(key));
+    for(const key of localKeys){
+      const mk=key.slice('attendance:'.length);
+      let localData={};
+      try{localData=JSON.parse(localStorage.getItem(key)||'{}')||{};}catch{}
+      if(!monthData[mk]) monthData[mk]={dates:[],attendance:{}};
+      const target=monthData[mk];
+      const localDates=Array.isArray(localData.dates)?localData.dates:[];
+      for(const date of localDates){
+        if(!target.dates.includes(date)) target.dates.push(date);
+        target.attendance[date]=target.attendance[date]||{};
+        const localRow=localData.attendance?.[date]||{};
+        for(let i=0;i<participants.length;i++){
+          const localValue=String(localRow[i]??'').trim();
+          const remoteValue=String(target.attendance[date][i]??'').trim();
+          if(localValue!=='' || remoteValue==='') target.attendance[date][i]=localValue;
+        }
+      }
+    }
+    Object.entries(monthData).forEach(([mk,data])=>{
+      data.dates=[...new Set(data.dates)].sort();
+      localStorage.setItem('attendance:'+mk,JSON.stringify(data));
+    });
+    // Den zusammengeführten Bestand zurück in die Cloud schreiben.
+    // Leere Cloud: ebenso vorhandene lokale Monate übernehmen.
+    await saveAll();
     loadMonth(); renderArchiveList(); renderOverview();
   }
   async function saveAll(){

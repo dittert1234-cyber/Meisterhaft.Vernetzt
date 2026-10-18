@@ -227,3 +227,18 @@ body.show-overview main > .panel.settings:not(.overview-extra) { display:block !
 .attendance-summary-table { min-width: 760px !important; }
 .hour-correction-input { width: 76px; max-width: 100%; padding: 7px 6px; border: 1px solid var(--border, #cbd5e1); border-radius: 7px; font: inherit; background: var(--input-bg, #fff); color: inherit; }
 .corrected-hours { font-weight: 750; white-space: nowrap; }
+
+
+/* Teilnehmerübersicht auf kleinen Bildschirmen kompakter; Desktop bleibt gleich */
+@media (max-width: 650px) {
+  #overviewPanel .table-wrap { overflow-x: auto; }
+  #overviewPanel .attendance-summary-table { min-width: 0 !important; width: 100%; table-layout: fixed; font-size: 11px; }
+  #overviewPanel .attendance-summary-table th, #overviewPanel .attendance-summary-table td { padding: 7px 4px; overflow-wrap: anywhere; white-space: normal; }
+  #overviewPanel .attendance-summary-table th:first-child, #overviewPanel .attendance-summary-table td:first-child { width: 30%; }
+  #overviewPanel .attendance-summary-table th:nth-child(2), #overviewPanel .attendance-summary-table td:nth-child(2),
+  #overviewPanel .attendance-summary-table th:nth-child(3), #overviewPanel .attendance-summary-table td:nth-child(3) { width: 18%; }
+  #overviewPanel .attendance-summary-table th:nth-child(4), #overviewPanel .attendance-summary-table td:nth-child(4) { width: 14%; }
+  #overviewPanel .attendance-summary-table th:nth-child(5), #overviewPanel .attendance-summary-table td:nth-child(5) { width: 18%; }
+  #overviewPanel .attendance-summary-table th:nth-child(6), #overviewPanel .attendance-summary-table td:nth-child(6) { width: 12%; }
+  #overviewPanel .hour-correction-input { width: 42px; padding: 5px 2px; font-size: 12px !important; }
+}
